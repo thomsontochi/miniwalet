@@ -3,7 +3,7 @@ import AppLayout from '@/layouts/AppLayout.vue';
 import { Head, usePage } from '@inertiajs/vue3';
 import axios from 'axios';
 import type Echo from 'laravel-echo';
-import { computed, getCurrentInstance, onBeforeUnmount, onMounted, ref } from 'vue';
+import { computed, getCurrentInstance, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import type { AppPageProps } from '@/types';
 
 type Transaction = {
@@ -56,6 +56,93 @@ const errors = ref<Record<string, string[]>>({});
 const form = ref({ receiver_id: '', amount: '' });
 const successMessage = ref('');
 
+type FieldName = 'receiver_id' | 'amount';
+
+const touchedFields = ref<Record<FieldName, boolean>>({
+    receiver_id: false,
+    amount: false,
+});
+
+const clearServerFieldError = (field: FieldName) => {
+    if (errors.value[field]) {
+        const { [field]: _removed, ...rest } = errors.value;
+        errors.value = rest as Record<string, string[]>;
+    }
+};
+
+const normalizeInput = (value: string | number | null | undefined): string =>
+    String(value ?? '').trim();
+
+const receiverInput = computed(() => normalizeInput(form.value.receiver_id));
+const amountInput = computed(() => normalizeInput(form.value.amount));
+
+const validateReceiverId = (value: string): string[] => {
+    const messages: string[] = [];
+    if (!value) {
+        messages.push('Receiver ID is required.');
+        return messages;
+    }
+
+    const numericValue = Number(value);
+
+    if (!Number.isInteger(numericValue) || numericValue <= 0) {
+        messages.push('Receiver ID must be a positive whole number.');
+    }
+
+    if (currentUserId.value !== null && numericValue === currentUserId.value) {
+        messages.push('You cannot send funds to yourself.');
+    }
+
+    return messages;
+};
+
+const validateAmount = (value: string): string[] => {
+    const messages: string[] = [];
+    if (!value) {
+        messages.push('Amount is required.');
+        return messages;
+    }
+
+    const numericValue = Number(value);
+
+    if (Number.isNaN(numericValue) || numericValue <= 0) {
+        messages.push('Amount must be greater than zero.');
+    }
+
+    if (!/^\d+(\.\d{1,4})?$/.test(value)) {
+        messages.push('Amount must have up to 4 decimal places.');
+    }
+
+    return messages;
+};
+
+const markFieldTouched = (field: FieldName) => {
+    touchedFields.value[field] = true;
+};
+
+const receiverClientErrors = computed(() => validateReceiverId(receiverInput.value));
+const amountClientErrors = computed(() => validateAmount(amountInput.value));
+
+const fieldErrors = computed(() => ({
+    receiver_id: [
+        ...(touchedFields.value.receiver_id ? receiverClientErrors.value : []),
+        ...(errors.value.receiver_id ?? []),
+    ],
+    amount: [
+        ...(touchedFields.value.amount ? amountClientErrors.value : []),
+        ...(errors.value.amount ?? []),
+    ],
+}));
+
+const hasValues = computed(() => receiverInput.value !== '' && amountInput.value !== '');
+
+const hasInvalidClientFields = computed(() => {
+    const receiverInvalid = touchedFields.value.receiver_id && receiverClientErrors.value.length > 0;
+    const amountInvalid = touchedFields.value.amount && amountClientErrors.value.length > 0;
+
+    return receiverInvalid || amountInvalid;
+});
+
 const currencyFormatter = new Intl.NumberFormat('en-US', {
     style: 'currency',
     currency: 'USD',
@@ -63,7 +150,7 @@ const currencyFormatter = new Intl.NumberFormat('en-US', {
 });
 
 const canSubmit = computed(
-    () => Boolean(form.value.receiver_id && form.value.amount && !loading.value),
+    () => hasValues.value && !loading.value && !hasInvalidClientFields.value,
 );
 
 const directionLabel = (transaction: Transaction) => {
@@ -99,9 +186,16 @@ const fetchTransactions = async (url?: string | null) => {
 };
 
 const submitTransfer = async () => {
-    loading.value = true;
     errors.value = {};
     successMessage.value = '';
+
+    touchedFields.value = { receiver_id: true, amount: true };
+
+    if (hasInvalidClientFields.value) {
+        return;
+    }
+
+    loading.value = true;
 
     try {
         const { data } = await axios.post<TransactionIndexResponse>(
@@ -113,6 +207,7 @@ const submitTransfer = async () => {
         );
 
         form.value = { receiver_id: '', amount: '' };
+        touchedFields.value = { receiver_id: false, amount: false };
         if (data.meta.balance) {
             balance.value = data.meta.balance;
         }
@@ -142,6 +237,28 @@ const goToLink = async (key: keyof PaginationLinks) => {
 };
 
 let privateChannel: ReturnType<EchoInstance['private']> | null = null;
+
+watch(
+    () => receiverInput.value,
+    (newValue) => {
+        if (newValue !== '') {
+            touchedFields.value.receiver_id = true;
+        }
+
+        clearServerFieldError('receiver_id');
+    },
+);
+
+watch(
+    () => amountInput.value,
+    (newValue) => {
+        if (newValue !== '') {
+            touchedFields.value.amount = true;
+        }
+
+        clearServerFieldError('amount');
+    },
+);
 
 const ensureCsrfCookie = async () => {
     try {
@@ -218,14 +335,15 @@ onBeforeUnmount(() => {
                             >Receiver ID</label
                         >
                         <input
-                            v-model="form.receiver_id"
+                            v-model.trim="form.receiver_id"
                             type="number"
                             min="1"
                             class="w-full rounded-md border border-sidebar-border bg-sidebar px-3 py-2 text-sm focus:border-sidebar-primary focus:outline-none"
                             placeholder="Enter receiver user ID"
+                            @blur="markFieldTouched('receiver_id')"
                         />
-                        <p v-if="errors.receiver_id" class="mt-1 text-xs text-red-500">
-                            {{ errors.receiver_id.join(', ') }}
+                        <p v-if="fieldErrors.receiver_id?.length" class="mt-1 text-xs text-red-500">
+                            {{ fieldErrors.receiver_id.join(', ') }}
                         </p>
                     </div>
 
@@ -234,15 +352,16 @@ onBeforeUnmount(() => {
                             >Amount</label
                         >
                         <input
-                            v-model="form.amount"
+                            v-model.trim="form.amount"
                             type="number"
                             step="0.0001"
                             min="0"
                             class="w-full rounded-md border border-sidebar-border bg-sidebar px-3 py-2 text-sm focus:border-sidebar-primary focus:outline-none"
                             placeholder="Amount to transfer"
+                            @blur="markFieldTouched('amount')"
                         />
-                        <p v-if="errors.amount" class="mt-1 text-xs text-red-500">
-                            {{ errors.amount.join(', ') }}
+                        <p v-if="fieldErrors.amount?.length" class="mt-1 text-xs text-red-500">
+                            {{ fieldErrors.amount.join(', ') }}
                         </p>
                     </div>
 
