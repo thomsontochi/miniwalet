@@ -1,3 +1,4 @@
+import type Echo from 'laravel-echo';
 import { AppPageProps } from '@/types/index';
 
 // Extend ImportMeta interface for Vite...
@@ -22,5 +23,6 @@ declare module 'vue' {
         $inertia: typeof Router;
         $page: Page;
         $headManager: ReturnType<typeof createHeadManager>;
+        $echo: Echo;
     }
 }

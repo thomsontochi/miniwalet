@@ -23,6 +23,11 @@ const mainNavItems: NavItem[] = [
         href: dashboard(),
         icon: LayoutGrid,
     },
+    {
+        title: 'Wallet',
+        href: '/wallet',
+        icon: LayoutGrid,
+    },
 ];
 
 const footerNavItems: NavItem[] = [

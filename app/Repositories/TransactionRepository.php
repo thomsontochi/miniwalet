@@ -16,12 +16,17 @@ class TransactionRepository
     public function latestForUser(int $userId, int $perPage = 15): LengthAwarePaginator
     {
         return Transaction::query()
+            ->with([
+                'sender:id,name',
+                'receiver:id,name',
+            ])
             ->where(function ($query) use ($userId) {
                 $query->where('sender_id', $userId)
                     ->orWhere('receiver_id', $userId);
             })
             ->orderByDesc('created_at')
-            ->paginate($perPage);
+            ->paginate($perPage)
+            ->withQueryString();
     }
 
     public function recentForUser(int $userId, int $limit = 10): Collection
