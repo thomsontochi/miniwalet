@@ -3,6 +3,7 @@
 namespace App\Repositories;
 
 use App\Models\Transaction;
+use Carbon\CarbonInterface;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Database\Eloquent\Collection;
 
@@ -39,5 +40,16 @@ class TransactionRepository
             ->orderByDesc('created_at')
             ->limit($limit)
             ->get();
+    }
+
+    public function countForUserBetween(int $userId, CarbonInterface $start, CarbonInterface $end): int
+    {
+        return Transaction::query()
+            ->where(function ($query) use ($userId) {
+                $query->where('sender_id', $userId)
+                    ->orWhere('receiver_id', $userId);
+            })
+            ->whereBetween('created_at', [$start, $end])
+            ->count();
     }
 }

@@ -3,6 +3,7 @@
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\Api\TransactionsController;
+use App\Http\Controllers\Api\DashboardStatsController;
 
 Route::get('/user', function (Request $request) {
     return $request->user();
@@ -11,4 +12,5 @@ Route::get('/user', function (Request $request) {
 Route::middleware('auth:sanctum')->group(function () {
     Route::get('/transactions', [TransactionsController::class, 'index']);
     Route::post('/transactions', [TransactionsController::class, 'store']);
+    Route::get('/dashboard/stats', DashboardStatsController::class);
 });
