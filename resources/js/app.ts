@@ -8,10 +8,16 @@ import { initializeTheme } from './composables/useAppearance';
 import Echo from 'laravel-echo';
 import Pusher from 'pusher-js';
 import { configureEcho } from '@laravel/echo-vue';
+import axios from 'axios';
 
 configureEcho({
     broadcaster: 'pusher',
 });
+
+axios.defaults.withCredentials = true;
+axios.defaults.xsrfCookieName = 'XSRF-TOKEN';
+axios.defaults.xsrfHeaderName = 'X-XSRF-TOKEN';
+axios.defaults.headers.common['X-Requested-With'] = 'XMLHttpRequest';
 
 const appName = import.meta.env.VITE_APP_NAME || 'Laravel';
 

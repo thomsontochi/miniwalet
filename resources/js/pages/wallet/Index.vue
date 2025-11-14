@@ -54,6 +54,7 @@ const paginationMeta = ref<Meta | null>(null);
 const balance = ref('0.0000');
 const errors = ref<Record<string, string[]>>({});
 const form = ref({ receiver_id: '', amount: '' });
+const successMessage = ref('');
 
 const currencyFormatter = new Intl.NumberFormat('en-US', {
     style: 'currency',
@@ -100,6 +101,7 @@ const fetchTransactions = async (url?: string | null) => {
 const submitTransfer = async () => {
     loading.value = true;
     errors.value = {};
+    successMessage.value = '';
 
     try {
         const { data } = await axios.post<TransactionIndexResponse>(
@@ -114,6 +116,8 @@ const submitTransfer = async () => {
         if (data.meta.balance) {
             balance.value = data.meta.balance;
         }
+
+        successMessage.value = 'Transfer completed successfully.';
 
         await fetchTransactions();
     } catch (error: any) {
@@ -252,6 +256,9 @@ onBeforeUnmount(() => {
 
                     <p v-if="errors.general" class="text-xs text-red-500">
                         {{ errors.general.join(', ') }}
+                    </p>
+                    <p v-if="successMessage" class="text-xs text-emerald-500">
+                        {{ successMessage }}
                     </p>
                 </form>
             </section>
